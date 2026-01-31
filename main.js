@@ -215,10 +215,10 @@ document.addEventListener("DOMContentLoaded", function(event) {
         const peak = (dataArray.reduce((m, v) => (v > m ? v : m), 0) - 128) / 127.0;
         if (peak > maxAllTime) {
             maxAllTime = peak;
-            console.log('[AMPLITUDE] New record peak =', maxAllTime.toFixed(3));
+            //console.log('[AMPLITUDE] New record peak =', maxAllTime.toFixed(3));
         }
         if (peak > 0.95) {
-            console.warn('[AMPLITUDE] WARNING current peak approaching 1.0 ->', peak.toFixed(3));
+            //console.warn('[AMPLITUDE] WARNING current peak approaching 1.0 ->', peak.toFixed(3));
         }
         // continue monitoring
         requestAnimationFrame(monitorAmplitude);
@@ -293,8 +293,8 @@ document.addEventListener("DOMContentLoaded", function(event) {
         // ADSR parameters
         const attackTime = 0.2;
         const decayTime = 0.3;
-        const sustainLevel = 0.4;
-        const maxGain = 0.5;
+        const sustainLevel = 0.3;
+        const maxGain = 0.4;
         
         // create gain node for this note
         const noteGain = audioCtx.createGain();
