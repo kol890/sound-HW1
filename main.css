@@ -86,3 +86,22 @@
 .right input {
   vertical-align: baseline;
 }
+
+/* Rainbow animated title */
+h1 {
+  font-family: "Open Sans", "Lucida Grande", Arial, sans-serif;
+  font-size: 28px;
+  margin: 8px 10px;
+  background: linear-gradient(90deg, #e74c3c, #f39c12, #f1c40f, #2ecc71, #3498db, #8e44ad, #e74c3c);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: rainbow-slide 6s linear infinite;
+}
+
+@keyframes rainbow-slide {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
