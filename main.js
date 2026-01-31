@@ -163,7 +163,7 @@ document.addEventListener("DOMContentLoaded", function(event) {
         const scale = baseMasterGain / Math.max(1, n);
         // smooth the change slightly to avoid clicks
         normalizeGain.gain.cancelScheduledValues(audioCtx.currentTime);
-        normalizeGain.gain.setTargetAtTime(scale, audioCtx.currentTime, 0.2);
+        normalizeGain.gain.setTargetAtTime(scale, audioCtx.currentTime, 0.5);
         //console.log(`[NORMALIZE] voices=${n} scale=${scale.toFixed(3)} (normalizeGain value ~ ${normalizeGain.gain.value.toFixed(3)})`);
     }
 
