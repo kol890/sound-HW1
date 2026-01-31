@@ -45,8 +45,11 @@ document.addEventListener("DOMContentLoaded", function(event) {
     const baseMasterGain = 0.8; // maximum level
     normalizeGain.gain.setValueAtTime(baseMasterGain, audioCtx.currentTime);
     globalGain.connect(normalizeGain);
-    normalizeGain.connect(audioCtx.destination);
-    console.log('[CONNECT] globalGain -> normalizeGain -> audioCtx.destination');
+    // Insert an Analyser node so we can monitor output amplitude and keep the visualizer happy
+    const globalAnalyser = audioCtx.createAnalyser();
+    normalizeGain.connect(globalAnalyser);
+    globalAnalyser.connect(audioCtx.destination);
+    //console.log('[CONNECT] globalGain -> normalizeGain -> analyser -> audioCtx.destination');
 
     let currentWaveform = 'sine';
 
@@ -118,7 +121,7 @@ document.addEventListener("DOMContentLoaded", function(event) {
             gain.gain.linearRampToValueAtTime(0, releaseStartTime + releaseTime);
             osc.stop(releaseStartTime + releaseTime + 0.01);
             delete activeOscillators[k.code];
-            console.log(`[VOICE OFF] key=${k.code} active=${Object.keys(activeOscillators).length}`);
+            //console.log(`[VOICE OFF] key=${k.code} active=${Object.keys(activeOscillators).length}`);
             updateNormalization();
             keyDiv.classList.remove('active');
         }
@@ -138,7 +141,7 @@ document.addEventListener("DOMContentLoaded", function(event) {
             gain.gain.linearRampToValueAtTime(0, releaseStartTime + releaseTime);
             osc.stop(releaseStartTime + releaseTime + 0.01);
             delete activeOscillators[k.code];
-            console.log(`[VOICE OFF] key=${k.code} active=${Object.keys(activeOscillators).length}`);
+            //console.log(`[VOICE OFF] key=${k.code} active=${Object.keys(activeOscillators).length}`);
             updateNormalization();
             keyDiv.classList.remove('active');
         }
@@ -166,8 +169,33 @@ document.addEventListener("DOMContentLoaded", function(event) {
         // smooth the change slightly to avoid clicks
         normalizeGain.gain.cancelScheduledValues(audioCtx.currentTime);
         normalizeGain.gain.setTargetAtTime(scale, audioCtx.currentTime, 0.02);
-        console.log(`[NORMALIZE] voices=${n} scale=${scale.toFixed(3)} (normalizeGain value ~ ${normalizeGain.gain.value.toFixed(3)})`);
+        //console.log(`[NORMALIZE] voices=${n} scale=${scale.toFixed(3)} (normalizeGain value ~ ${normalizeGain.gain.value.toFixed(3)})`);
     }
+
+    // Amplitude monitoring (tracks instantaneous peak and all-time peak)
+    let maxAllTime = 0;
+    const analyser = globalAnalyser;
+    analyser.fftSize = 2048;
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+
+    function monitorAmplitude() {
+        analyser.getByteTimeDomainData(dataArray);
+        // values range 0-255, midpoint 128 -> scale to -1..1
+        const peak = (dataArray.reduce((m, v) => (v > m ? v : m), 0) - 128) / 127.0;
+        if (peak > maxAllTime) {
+            maxAllTime = peak;
+            console.log('[AMPLITUDE] New record peak =', maxAllTime.toFixed(3));
+        }
+        if (peak > 0.95) {
+            console.warn('[AMPLITUDE] WARNING current peak approaching 1.0 ->', peak.toFixed(3));
+        }
+        // continue monitoring
+        requestAnimationFrame(monitorAmplitude);
+    }
+
+    // Start monitoring (runs continuously)
+    monitorAmplitude();
 
     function keyDown(event) {
         // Resume AudioContext on first user gesture (browser autoplay policies)
@@ -207,7 +235,7 @@ document.addEventListener("DOMContentLoaded", function(event) {
             // Stop oscillator just after release completes
             osc.stop(releaseStartTime + releaseTime + 0.01);
             delete activeOscillators[key];
-            console.log(`[VOICE OFF] key=${key} active=${Object.keys(activeOscillators).length}`);
+            //console.log(`[VOICE OFF] key=${key} active=${Object.keys(activeOscillators).length}`);
             updateNormalization();
             
             // Remove highlight from the visual key
@@ -241,7 +269,7 @@ document.addEventListener("DOMContentLoaded", function(event) {
         // hold sustain level
         
         noteGain.connect(globalGain);
-        console.log(`[CONNECT] noteGain -> globalGain at ${now.toFixed(3)}s`);
+        //console.log(`[CONNECT] noteGain -> globalGain at ${now.toFixed(3)}s`);
         
         // Create and configure oscillator
         const osc = audioCtx.createOscillator();
@@ -252,7 +280,7 @@ document.addEventListener("DOMContentLoaded", function(event) {
         
         // Store oscillator, gain, and sustain level for ADSR control
         activeOscillators[key] = {osc, gain: noteGain, sustainLevel}
-        console.log(`[VOICE ON] key=${key} active=${Object.keys(activeOscillators).length}`);
+        //console.log(`[VOICE ON] key=${key} active=${Object.keys(activeOscillators).length}`);
         updateNormalization();
     }
 })
