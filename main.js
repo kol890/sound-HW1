@@ -30,11 +30,6 @@ const keyboardFrequencyMap = {
 document.addEventListener("DOMContentLoaded", function(event) {
 
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    
-    // Create a gain node to prevent clipping and control volume
-    //const gainNode = audioCtx.createGain();
-    //gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
-    //gainNode.connect(audioCtx.destination);
 
     const globalGain = audioCtx.createGain(); //this will control the volume of all notes
     // keep per-voice gains relative to 1.0; normalizeGain will apply overall master level
@@ -168,7 +163,7 @@ document.addEventListener("DOMContentLoaded", function(event) {
         const scale = baseMasterGain / Math.max(1, n);
         // smooth the change slightly to avoid clicks
         normalizeGain.gain.cancelScheduledValues(audioCtx.currentTime);
-        normalizeGain.gain.setTargetAtTime(scale, audioCtx.currentTime, 0.02);
+        normalizeGain.gain.setTargetAtTime(scale, audioCtx.currentTime, 0.2);
         //console.log(`[NORMALIZE] voices=${n} scale=${scale.toFixed(3)} (normalizeGain value ~ ${normalizeGain.gain.value.toFixed(3)})`);
     }
 
