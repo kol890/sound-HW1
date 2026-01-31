@@ -52,11 +52,6 @@
   background-color: #eeeeff;
 }
 
-.key:active,
-.active {
-  background-color: black;
-  color: white;
-}
 
 .octave {
   display: inline-block;

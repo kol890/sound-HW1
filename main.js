@@ -31,22 +31,31 @@ document.addEventListener("DOMContentLoaded", function(event) {
 
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-    const globalGain = audioCtx.createGain(); //this will control the volume of all notes
-    // keep per-voice gains relative to 1.0; normalizeGain will apply overall master level
+    const globalGain = audioCtx.createGain();
     globalGain.gain.setValueAtTime(1.0, audioCtx.currentTime);
 
-    // Normalization/master gain to prevent clipping when multiple voices play
+    // Normalization to prevent clipping when multiple voices play
     const normalizeGain = audioCtx.createGain();
     const baseMasterGain = 0.8; // maximum level
     normalizeGain.gain.setValueAtTime(baseMasterGain, audioCtx.currentTime);
     globalGain.connect(normalizeGain);
-    // Insert an Analyser node so we can monitor output amplitude and keep the visualizer happy
+    normalizeGain.connect(audioCtx.destination);
+
+    // analyser node to monitor output amplitude
     const globalAnalyser = audioCtx.createAnalyser();
     normalizeGain.connect(globalAnalyser);
-    globalAnalyser.connect(audioCtx.destination);
-    //console.log('[CONNECT] globalGain -> normalizeGain -> analyser -> audioCtx.destination');
 
     let currentWaveform = 'sine';
+    const memFadeSec = 1; // seconds for color memory fade
+    const memMap = {}; // map key code -> color overlay element
+
+    function freqToHue(freq) {
+        // map frequency (log) into 0..360 hue range using expected piano range
+        const minF = 130.8127826502993; // C3
+        const maxF = 987.7666025122482; // B5
+        const v = (Math.log(freq) - Math.log(minF)) / (Math.log(maxF) - Math.log(minF));
+        return Math.round(((v % 1) + 1) * 360) % 360;
+    }
 
     const keyboardDiv = document.querySelector(".keyboard");
 
@@ -81,17 +90,37 @@ document.addEventListener("DOMContentLoaded", function(event) {
     const keyDiv = document.createElement("div");
     keyDiv.className = "key";
     keyDiv.dataset.key = k.code;
+    keyDiv.style.position = 'relative';
     keyDiv.innerHTML = `<div>${k.label}</div>`;
+    // create a color-memory overlay that will be faded out after release
+    const mem = document.createElement('div');
+    mem.className = 'mem';
+    mem.style.position = 'absolute';
+    mem.style.left = '0';
+    mem.style.top = '0';
+    mem.style.right = '0';
+    mem.style.bottom = '0';
+    mem.style.pointerEvents = 'none';
+    mem.style.opacity = '0';
+    mem.style.transition = `opacity ${memFadeSec}s ease`;
+    mem.style.zIndex = '2';
+    keyDiv.appendChild(mem);
+    memMap[k.code] = mem;
+    keyDiv.style.zIndex = '1';
     keyboardDiv.appendChild(keyDiv);
 
     // Add click handlers to visual keys
     keyDiv.addEventListener('mousedown', () => {
-        // resume AudioContext on first user gesture (browser autoplay policies)
-        // audio context was showing as suspended and oscillators were not showing as connected to destination
+        // resume AudioContext on first user gesture becuz audio context was showing as suspended
         const start = () => {
             if (!activeOscillators[k.code]) {
                 playNote(k.code);
                 keyDiv.classList.add('active');
+                // set memory overlay color immediately
+                const hue = freqToHue(keyboardFrequencyMap[k.code]);
+                mem.style.background = `hsl(${hue},70%,50%)`;
+                mem.style.transition = `opacity ${memFadeSec}s ease, background-color 0.05s linear`;
+                mem.style.opacity = '1';
             }
         };
         if (audioCtx.state === 'suspended') {
@@ -112,13 +141,17 @@ document.addEventListener("DOMContentLoaded", function(event) {
             const currentGain = gain.gain.value;
             gain.gain.setValueAtTime(currentGain, releaseStartTime);
             
-           // Release: linear ramp to 0 for clean fade
+           // Release: linear ramp to 0
             gain.gain.linearRampToValueAtTime(0, releaseStartTime + releaseTime);
             osc.stop(releaseStartTime + releaseTime + 0.01);
             delete activeOscillators[k.code];
-            //console.log(`[VOICE OFF] key=${k.code} active=${Object.keys(activeOscillators).length}`);
             updateNormalization();
             keyDiv.classList.remove('active');
+            // start fading the memory overlay (leave color, fade opacity)
+            mem.style.transition = `opacity ${memFadeSec}s ease`;
+            // ensure visible then fade
+            mem.style.opacity = '1';
+            requestAnimationFrame(() => { mem.style.opacity = '0'; });
         }
     });
 
@@ -136,12 +169,15 @@ document.addEventListener("DOMContentLoaded", function(event) {
             gain.gain.linearRampToValueAtTime(0, releaseStartTime + releaseTime);
             osc.stop(releaseStartTime + releaseTime + 0.01);
             delete activeOscillators[k.code];
-            //console.log(`[VOICE OFF] key=${k.code} active=${Object.keys(activeOscillators).length}`);
             updateNormalization();
             keyDiv.classList.remove('active');
+            mem.style.transition = `opacity ${memFadeSec}s ease`;
+            mem.style.opacity = '1';
+            requestAnimationFrame(() => { mem.style.opacity = '0'; });
         }
     });
     });
+
 
     // Add listener to waveform selector
     const waveformSelect = document.querySelector('select[name="waveform"]');
@@ -164,10 +200,9 @@ document.addEventListener("DOMContentLoaded", function(event) {
         // smooth the change slightly to avoid clicks
         normalizeGain.gain.cancelScheduledValues(audioCtx.currentTime);
         normalizeGain.gain.setTargetAtTime(scale, audioCtx.currentTime, 0.5);
-        //console.log(`[NORMALIZE] voices=${n} scale=${scale.toFixed(3)} (normalizeGain value ~ ${normalizeGain.gain.value.toFixed(3)})`);
     }
 
-    // Amplitude monitoring (tracks instantaneous peak and all-time peak)
+    // Amplitude monitoring
     let maxAllTime = 0;
     const analyser = globalAnalyser;
     analyser.fftSize = 2048;
@@ -189,18 +224,26 @@ document.addEventListener("DOMContentLoaded", function(event) {
         requestAnimationFrame(monitorAmplitude);
     }
 
-    // Start monitoring (runs continuously)
     monitorAmplitude();
 
     function keyDown(event) {
-        // Resume AudioContext on first user gesture (browser autoplay policies)
+        // Resume AudioContext on first user gesture becuz audio context was showing as suspended
         const proceed = () => {
             const key = (event.detail || event.which).toString();
             if (keyboardFrequencyMap[key] && !activeOscillators[key]) {
                 playNote(key);
                 // Highlight the visual key
                 const keyDiv = document.querySelector(`[data-key="${key}"]`);
-                if (keyDiv) keyDiv.classList.add('active');
+                if (keyDiv) {
+                    keyDiv.classList.add('active');
+                    const mem = memMap[key];
+                    if (mem) {
+                        const hue = freqToHue(keyboardFrequencyMap[key]);
+                        mem.style.background = `hsl(${hue},70%,50%)`;
+                        mem.style.transition = `opacity ${memFadeSec}s ease, background-color 0.05s linear`;
+                        mem.style.opacity = '1';
+                    }
+                }
             }
         };
         if (audioCtx.state === 'suspended') {
@@ -230,12 +273,17 @@ document.addEventListener("DOMContentLoaded", function(event) {
             // Stop oscillator just after release completes
             osc.stop(releaseStartTime + releaseTime + 0.01);
             delete activeOscillators[key];
-            //console.log(`[VOICE OFF] key=${key} active=${Object.keys(activeOscillators).length}`);
             updateNormalization();
             
             // Remove highlight from the visual key
             const keyDiv = document.querySelector(`[data-key="${key}"]`);
             if (keyDiv) keyDiv.classList.remove('active');
+            const mem = memMap[key];
+            if (mem) {
+                mem.style.transition = `opacity ${memFadeSec}s ease`;
+                mem.style.opacity = '1';
+                requestAnimationFrame(() => { mem.style.opacity = '0'; });
+            }
         }
     }
 
